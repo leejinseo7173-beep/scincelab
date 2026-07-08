@@ -4,5 +4,6 @@
  */
 import demo from './demo'
 import incline from './incline'
+import projectile from './projectile'
 
-export const experiments = [incline, demo]
+export const experiments = [incline, projectile, demo]
