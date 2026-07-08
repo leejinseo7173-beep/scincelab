@@ -121,7 +121,9 @@ const incline = {
     // 빗면 방향(내려가는 쪽) 단위벡터: (cosθ, sinθ) — 화면 y는 아래가 +
     const px = topX + state.s * scale * Math.cos(th)
     const py = topY + state.s * scale * Math.sin(th)
-    const box = 20 + params.m * 4 // 질량에 따라 상자 크기
+    // 상자 크기는 고정 — 크기가 변하면 같은 속도라도 다르게 보이는 착시가 생긴다.
+    // (가속도는 질량과 무관하므로 질량은 상자 위 라벨로만 표시)
+    const box = 30
 
     ctx.save()
     ctx.translate(px, py)
@@ -132,6 +134,11 @@ const incline = {
     ctx.lineWidth = 1.5
     ctx.fillRect(-box / 2, -box, box, box)
     ctx.strokeRect(-box / 2, -box, box, box)
+    ctx.fillStyle = '#78350f'
+    ctx.font = 'bold 11px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(`${params.m}kg`, 0, -box / 2 + 4)
+    ctx.textAlign = 'start'
 
     // ---- 힘 벡터 (상자 중심 기준, 빗면 좌표계) ----
     // 무게(mg)가 항상 같은 길이(70px)가 되도록 정규화 → 상대 크기 비교용
