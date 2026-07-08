@@ -128,7 +128,7 @@ const projectile = {
       ctx.fillText(`${wy}`, originX - 30, py + 4)
     }
     ctx.save()
-    ctx.translate(18, 60)
+    ctx.translate(18, 130) // 상단 상태 텍스트와 겹치지 않게 아래쪽에 배치
     ctx.rotate(-Math.PI / 2)
     ctx.fillText('y (m)', 0, 0)
     ctx.restore()
