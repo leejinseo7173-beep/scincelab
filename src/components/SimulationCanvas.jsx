@@ -31,7 +31,12 @@ export default function SimulationCanvas({ onFrame }) {
       // 탭 비활성화 등으로 dt가 튀는 것 방지 (최대 50ms)
       const dt = Math.min((now - last) / 1000, 0.05)
       last = now
-      frameRef.current(ctx, canvas, dt)
+      // 한 프레임에서 오류가 나도 애니메이션 루프는 절대 죽지 않게 한다
+      try {
+        frameRef.current(ctx, canvas, dt)
+      } catch (e) {
+        console.error('[SimulationCanvas] frame error:', e)
+      }
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)

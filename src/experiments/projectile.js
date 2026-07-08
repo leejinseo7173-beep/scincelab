@@ -53,6 +53,8 @@ const projectile = {
   id: 'projectile',
   title: '포물선 운동 (투사체)',
   subject: '물리',
+  icon: '🎯',
+  summary: '발사각과 초기속도에 따라 궤적·사거리·최고점이 어떻게 달라지는지 실험합니다. 45°에서 사거리가 최대!',
 
   params: [
     { key: 'v0', label: '초기속도 v₀', min: 5, max: 50, step: 1, value: 20, unit: 'm/s' },

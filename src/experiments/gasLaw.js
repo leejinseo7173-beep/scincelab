@@ -28,6 +28,8 @@ const gasLaw = {
   id: 'gas-law',
   title: '보일-샤를 법칙 (기체)',
   subject: '화학',
+  icon: '🧪',
+  summary: '피스톤 실린더 속 기체 입자를 보며 압력·온도·부피의 관계(PV=nRT)를 확인합니다.',
 
   params: [
     {

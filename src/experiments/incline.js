@@ -44,6 +44,8 @@ const incline = {
   id: 'incline',
   title: '빗면에서의 마찰과 가속도',
   subject: '물리',
+  icon: '📐',
+  summary: '빗면 각도와 마찰계수를 바꿔가며 물체가 미끄러지는 조건(tanθ > μ)과 가속도를 알아봅니다.',
 
   params: [
     { key: 'theta', label: '빗면 각도 θ', min: 0, max: 60, step: 1, value: 30, unit: '°' },
