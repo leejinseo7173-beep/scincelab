@@ -59,14 +59,19 @@ const incline = {
   step: (state, params, dt) => {
     const a = accel(params)
     if (a === 0 || state.arrived) return state // 정지(마찰 충분) 또는 도착
-    const v = state.v + a * dt
+    let v = state.v + a * dt
     let s = state.s + v * dt
+    let t = state.t + dt
     let arrived = false
     if (s >= SLOPE_LEN) {
+      // 도착 순간을 프레임 타이밍에 맡기면 v가 실행마다 ±0.05쯤 달라진다.
+      // 정확한 운동학 값으로 스냅: v = √(2aL), t = v/a
       s = SLOPE_LEN
+      v = Math.sqrt(2 * a * SLOPE_LEN)
+      t = v / a
       arrived = true
     }
-    return { t: state.t + dt, s, v, arrived }
+    return { t, s, v, arrived }
   },
 
   draw: (ctx, state, params, canvas) => {
