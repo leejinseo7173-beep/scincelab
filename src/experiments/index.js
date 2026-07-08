@@ -3,5 +3,6 @@
  * 여기 배열에 모듈을 추가하면 상단 드롭다운에 자동으로 나타난다.
  */
 import demo from './demo'
+import incline from './incline'
 
-export const experiments = [demo]
+export const experiments = [incline, demo]
