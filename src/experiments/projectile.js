@@ -1,54 +1,120 @@
 /**
  * 실험 ② 포물선 운동 (투사체) + 자유낙하 — 물리
  *
- * 포물선: x = v₀·cosθ·t,  y = h + v₀·sinθ·t − ½gt²
- *         vx = v₀·cosθ,   vy = v₀·sinθ − g·t
- * 자유낙하: v₀=0 (높이 h에서 가만히 놓음) → y = h − ½gt², vy = −g·t
- * 비행시간 T = (v₀sinθ + √((v₀sinθ)² + 2gh)) / g
- * 사거리 R = v₀cosθ·T,  최고점 H = h + (v₀sinθ)²/(2g)
+ * 공기저항 없음(k=0): x = v₀cosθ·t, y = h + v₀sinθ·t − ½gt² (해석해)
+ * 공기저항 있음(k>0): a = (−k·vx, −g − k·vy) 를 수치 적분 (선형 저항 모델)
+ *   → 비대칭 궤적, 종단속도 v_t = g/k 관찰 가능
+ * 에너지: KE = ½mv², PE = mgy, E = KE + PE (k=0이면 E 보존)
  *
- * [여러 공 동시 발사]
- * 슬라이더로 조건을 맞춘 뒤 "공 추가"를 누르면 그 조건이 고정된 공이 추가된다.
- * 재생/초기화하면 모든 공이 t=0에 동시에 발사되어 조건별로 비교할 수 있다.
- * 파란 공은 항상 "현재 슬라이더 조건"을 따라간다.
+ * [여러 공 비교]
+ * 위 슬라이더는 공1(파랑, 현재 조건). [공 추가]를 누르면 params.balls에 조건이
+ * 복사되고, 공마다 아래 편집기에서 변인(v₀·θ·h·g·k)을 따로 조절할 수 있다.
+ * 조건을 바꾸면 전체가 자동으로 다시 동시 발사되고, 그래프에서도 공별
+ * 속력/운동에너지가 색으로 구별된다.
  */
-const G = 9.8
+import ProjectileBallsEditor from './ProjectileBallsEditor'
 
 const rad = (deg) => (deg * Math.PI) / 180
 
 const isFreefall = (params) => params.mode === 'freefall'
 
-/** 추가된 공들의 조건 — 모듈 수명 동안 유지 (파라미터 변경/초기화에도 유지) */
-let savedBalls = []
-const MAX_SAVED = 5
 const CURRENT_COLOR = '#2563eb'
 const BALL_COLORS = ['#dc2626', '#059669', '#d97706', '#7c3aed', '#0891b2']
+const ballColor = (i) => (i === 0 ? CURRENT_COLOR : BALL_COLORS[(i - 1) % BALL_COLORS.length])
+const ballName = (i) => (i === 0 ? '공1(현재)' : `공${i + 1}`)
 
-/** 현재 params를 공 하나의 조건(cfg)으로 고정 */
+/** 현재 params(위 슬라이더)를 공1의 조건(cfg)으로 변환 */
 function cfgFrom(params) {
   const free = isFreefall(params)
-  return { free, v0: free ? 0 : params.v0, theta: free ? 0 : params.theta, h: params.h }
+  return {
+    free,
+    v0: free ? 0 : params.v0,
+    theta: free ? 0 : params.theta,
+    h: params.h,
+    g: params.g,
+    k: params.k,
+  }
 }
 
-/** 공 조건 → 유도값 (초기속도 성분/비행시간/사거리/최고점/착지속도) */
-function deriveCfg(cfg) {
+/** 전체 공 조건 목록: [공1(현재 슬라이더), ...추가된 공들] */
+const allCfgs = (params) => [cfgFrom(params), ...(params.balls ?? [])]
+
+function initialVel(cfg) {
   const th = rad(cfg.theta)
-  const vx0 = cfg.free ? 0 : cfg.v0 * Math.cos(th)
-  const vy0 = cfg.free ? 0 : cfg.v0 * Math.sin(th)
-  const T = (vy0 + Math.sqrt(vy0 * vy0 + 2 * G * cfg.h)) / G
-  const R = vx0 * T
-  const Hmax = cfg.h + (vy0 * vy0) / (2 * G)
-  const vLand = Math.hypot(vx0, vy0 - G * T)
-  return { vx0, vy0, T, R, Hmax, vLand }
+  return {
+    vx0: cfg.free ? 0 : cfg.v0 * Math.cos(th),
+    vy0: cfg.free ? 0 : cfg.v0 * Math.sin(th),
+  }
 }
 
-const derived = (params) => deriveCfg(cfgFrom(params))
+/**
+ * 공 조건 → 예상값 (사거리 R / 최고점 H / 비행시간 T / 착지속도).
+ * k=0이면 해석해, k>0이면 수치 시뮬레이션. 매 프레임 호출되므로 캐시.
+ */
+const predCache = new Map()
+function predict(cfg) {
+  const key = `${cfg.free}|${cfg.v0}|${cfg.theta}|${cfg.h}|${cfg.g}|${cfg.k}`
+  if (predCache.has(key)) return predCache.get(key)
 
-const cfgLabel = (cfg) =>
-  cfg.free ? `자유낙하 h=${cfg.h}m` : `v₀=${cfg.v0} θ=${cfg.theta}° h=${cfg.h}m`
+  const { vx0, vy0 } = initialVel(cfg)
+  let res
+  if (cfg.k === 0) {
+    const T = (vy0 + Math.sqrt(vy0 * vy0 + 2 * cfg.g * cfg.h)) / cfg.g
+    res = {
+      T,
+      R: vx0 * T,
+      Hmax: cfg.h + (vy0 * vy0) / (2 * cfg.g),
+      vLand: Math.hypot(vx0, vy0 - cfg.g * T),
+    }
+  } else if (cfg.h <= 0 && vy0 <= 0) {
+    res = { T: 0, R: 0, Hmax: cfg.h, vLand: 0 }
+  } else {
+    // 수치 예측 (dt=1/240, 최대 120초)
+    let x = 0, y = cfg.h, vx = vx0, vy = vy0, t = 0, Hmax = cfg.h
+    const dt = 1 / 240
+    while (t < 120) {
+      vx += -cfg.k * vx * dt
+      vy += (-cfg.g - cfg.k * vy) * dt
+      const ny = y + vy * dt
+      const nx = x + vx * dt
+      t += dt
+      if (ny <= 0 && vy < 0) {
+        const f = y / (y - ny)
+        x += vx * dt * f
+        y = 0
+        break
+      }
+      x = nx
+      y = ny
+      if (y > Hmax) Hmax = y
+    }
+    res = { T: t, R: x, Hmax, vLand: Math.hypot(vx, vy) }
+  }
+  if (predCache.size > 300) predCache.clear()
+  predCache.set(key, res)
+  return res
+}
+
+const cfgLabel = (cfg) => {
+  let s = cfg.free ? `자유낙하 h=${cfg.h}m` : `v₀=${cfg.v0} θ=${cfg.theta}° h=${cfg.h}m`
+  if (cfg.g !== 9.8) s += ` g=${cfg.g}`
+  if (cfg.k > 0) s += ` k=${cfg.k}`
+  return s
+}
 
 function makeBall(cfg, color) {
-  return { cfg, color, x: 0, y: cfg.h, landed: false, trail: [{ x: 0, y: cfg.h }] }
+  const { vx0, vy0 } = initialVel(cfg)
+  return {
+    cfg,
+    color,
+    x: 0,
+    y: cfg.h,
+    vx: vx0,
+    vy: vy0,
+    landed: cfg.h <= 0 && vy0 <= 0, // 바닥에서 위로 던지지 않으면 제자리
+    landT: null,
+    trail: [{ x: 0, y: cfg.h }],
+  }
 }
 
 /** 축 눈금 간격을 보기 좋은 값(1/2/5×10ⁿ)으로 선택 */
@@ -85,12 +151,12 @@ const projectile = {
   subject: '물리',
   icon: '🎯',
   summary:
-    '발사각·초기속도에 따른 포물선 궤적과 자유낙하 실험. 조건이 다른 공 여러 개를 동시에 발사해 비교할 수 있습니다.',
+    '초기속도·발사각은 물론 중력·공기저항까지 공마다 다르게 설정해 동시 발사 비교. 공별 속력·에너지 그래프 제공.',
 
   params: [
     {
       key: 'mode',
-      label: '실험 모드',
+      label: '실험 모드 (공1)',
       type: 'select',
       value: 'projectile',
       options: [
@@ -107,33 +173,17 @@ const projectile = {
       visible: (p) => !isFreefall(p),
     },
     { key: 'h', label: '초기높이 h', min: 0, max: 30, step: 0.5, value: 0, unit: 'm' },
-  ],
-
-  // 실험 전용 버튼 (ControlPanel이 자동 렌더링)
-  actions: [
-    {
-      label: '➕ 현재 조건 공 추가 (동시 발사)',
-      apply: (state, params) => {
-        if (savedBalls.length < MAX_SAVED) savedBalls = [...savedBalls, cfgFrom(params)]
-        return projectile.reset(params) // 전체 재발사
-      },
-    },
-    {
-      label: '🗑 추가한 공 모두 제거',
-      apply: (state, params) => {
-        savedBalls = []
-        return projectile.reset(params)
-      },
-    },
+    { key: 'g', label: '중력가속도 g', min: 1, max: 25, step: 0.1, value: 9.8, unit: 'm/s²' },
+    { key: 'k', label: '공기저항 계수 k', min: 0, max: 1, step: 0.01, value: 0, unit: '/s' },
+    { key: 'm', label: '질량 m (에너지 계산용)', min: 0.5, max: 5, step: 0.1, value: 1, unit: 'kg' },
+    // 추가된 공들 — 공마다 변인을 따로 편집하는 커스텀 패널
+    { key: 'balls', type: 'custom', value: [], component: ProjectileBallsEditor },
   ],
 
   reset: (params) => ({
     t: 0,
     done: false,
-    balls: [
-      makeBall(cfgFrom(params), CURRENT_COLOR), // [0] = 현재 슬라이더 조건
-      ...savedBalls.map((cfg, i) => makeBall(cfg, BALL_COLORS[i % BALL_COLORS.length])),
-    ],
+    balls: allCfgs(params).map((cfg, i) => makeBall(cfg, ballColor(i))),
   }),
 
   step: (state, params, dt) => {
@@ -142,15 +192,36 @@ const projectile = {
     let allLanded = true
     const balls = state.balls.map((b) => {
       if (b.landed) return b
-      const d = deriveCfg(b.cfg)
-      const tb = Math.min(t, d.T) // 착지 시각으로 스냅 → 정확히 y=0에서 멈춤
-      const landed = t >= d.T
+      let { x, y, vx, vy } = b
+      let landed = false
+      let landT = null
+      // 서브스텝 수치 적분 (반암시적 오일러) — 공기저항 지원 + 착지 선형 보간
+      let remaining = dt
+      let localT = state.t
+      const SUB = 1 / 480
+      while (remaining > 1e-9 && !landed) {
+        const hstep = Math.min(SUB, remaining)
+        remaining -= hstep
+        localT += hstep
+        vx += -b.cfg.k * vx * hstep
+        vy += (-b.cfg.g - b.cfg.k * vy) * hstep
+        const nx = x + vx * hstep
+        const ny = y + vy * hstep
+        if (ny <= 0 && vy < 0) {
+          const f = y / (y - ny)
+          x += vx * hstep * f
+          y = 0
+          landT = localT - hstep * (1 - f)
+          landed = true
+        } else {
+          x = nx
+          y = ny
+        }
+      }
       if (!landed) allLanded = false
-      const x = d.vx0 * tb
-      const y = Math.max(b.cfg.h + d.vy0 * tb - 0.5 * G * tb * tb, 0)
       const trail = [...b.trail, { x, y }]
       if (trail.length > 400) trail.shift()
-      return { ...b, x, y, landed, trail }
+      return { ...b, x, y, vx, vy, landed, landT, trail }
     })
     return { t, balls, done: allLanded }
   },
@@ -158,14 +229,14 @@ const projectile = {
   draw: (ctx, state, params, canvas) => {
     const W = canvas.width
     const H = canvas.height
-    const d = derived(params)
     const free = isFreefall(params)
     const balls = state.balls
-    const derivedAll = balls.map((b) => deriveCfg(b.cfg))
+    const preds = balls.map((b) => predict(b.cfg))
+    const d = preds[0] // 공1 예상값
 
     // ---- 월드 → 픽셀 스케일: 모든 공의 사거리/최고점이 화면에 들어오게 ----
-    const maxR = Math.max(...derivedAll.map((x) => x.R))
-    const maxH = Math.max(...derivedAll.map((x) => x.Hmax))
+    const maxR = Math.max(...preds.map((p) => p.R))
+    const maxH = Math.max(...preds.map((p) => p.Hmax))
     const allVertical = maxR < 0.5 // 전부 자유낙하면 가운데 배치
     const originX = allVertical ? W / 2 : 55
     const groundY = H - 42
@@ -210,7 +281,7 @@ const projectile = {
       ctx.fillText(`${wy}`, axisX - 30, py + 4)
     }
 
-    // ---- 발사대 / 낙하대 (현재 조건 기준) ----
+    // ---- 발사대 / 낙하대 (공1 기준) ----
     const [lx, ly] = toPx(0, params.h)
     ctx.fillStyle = '#64748b'
     ctx.fillRect(lx - 8, ly, 8, groundY - ly)
@@ -227,7 +298,7 @@ const projectile = {
 
     // ---- 모든 공: 궤적(점선) + 공 ----
     balls.forEach((b) => {
-      ctx.strokeStyle = b.color + '66' // 반투명 궤적
+      ctx.strokeStyle = b.color + '66'
       ctx.lineWidth = 2
       ctx.setLineDash([5, 4])
       ctx.beginPath()
@@ -245,16 +316,14 @@ const projectile = {
       ctx.fill()
     })
 
-    // ---- 현재 공(파랑)의 속도 벡터 ----
+    // ---- 공1(파랑)의 속도 벡터 ----
     const main = balls[0]
     if (!main.landed) {
-      const tb = Math.min(state.t, d.T)
-      const vy = d.vy0 - G * tb
       const [bx, by] = toPx(main.x, main.y)
       const vScale = 2.2
-      if (Math.abs(d.vx0) > 0.01) arrow(ctx, bx, by, bx + d.vx0 * vScale, by, '#f97316')
-      if (Math.abs(vy) > 0.01) arrow(ctx, bx, by, bx, by - vy * vScale, '#10b981')
-      arrow(ctx, bx, by, bx + d.vx0 * vScale, by - vy * vScale, '#dc2626')
+      if (Math.abs(main.vx) > 0.01) arrow(ctx, bx, by, bx + main.vx * vScale, by, '#f97316')
+      if (Math.abs(main.vy) > 0.01) arrow(ctx, bx, by, bx, by - main.vy * vScale, '#10b981')
+      arrow(ctx, bx, by, bx + main.vx * vScale, by - main.vy * vScale, '#dc2626')
     }
 
     // ---- 공 목록 범례 (우측 상단) ----
@@ -268,28 +337,27 @@ const projectile = {
       ctx.fill()
       ctx.fillStyle = '#475569'
       ctx.fillText(
-        (i === 0 ? '현재: ' : '') + cfgLabel(b.cfg) + (b.landed ? ` ✓ R=${deriveCfg(b.cfg).R.toFixed(1)}m` : ''),
+        `${ballName(i)}: ${cfgLabel(b.cfg)}${b.landed ? ` ✓ R=${b.x.toFixed(1)}m` : ''}`,
         W - 26, ty,
       )
     })
     ctx.textAlign = 'start'
 
-    // ---- 상태 텍스트 (현재 공 기준) ----
-    const tb = Math.min(state.t, d.T)
-    const vyNow = main.landed ? 0 : d.vy0 - G * tb
-    const vNow = main.landed ? 0 : Math.hypot(d.vx0, vyNow)
+    // ---- 상태 텍스트 (공1 기준) ----
+    const vNow = main.landed ? 0 : Math.hypot(main.vx, main.vy)
     ctx.fillStyle = '#334155'
     ctx.font = '14px sans-serif'
     ctx.fillText(
-      `t = ${state.t.toFixed(2)} s   y = ${main.y.toFixed(1)} m   vx = ${d.vx0.toFixed(1)}  vy = ${vyNow.toFixed(1)}  |v| = ${vNow.toFixed(1)} m/s`,
+      `t = ${state.t.toFixed(2)} s   y = ${main.y.toFixed(1)} m   vx = ${(main.landed ? 0 : main.vx).toFixed(1)}  vy = ${(main.landed ? 0 : main.vy).toFixed(1)}  |v| = ${vNow.toFixed(1)} m/s`,
       20, 24,
     )
     ctx.fillStyle = '#64748b'
     ctx.font = '12px sans-serif'
+    const dragNote = params.k > 0 ? ` · 종단속도 g/k=${(params.g / params.k).toFixed(1)} m/s` : ''
     ctx.fillText(
       free
-        ? `현재 조건 예상: 낙하시간 T=${d.T.toFixed(2)} s · 착지속도 ${d.vLand.toFixed(1)} m/s (√2gh)`
-        : `현재 조건 예상: 사거리 R=${d.R.toFixed(1)} m · 최고점 H=${d.Hmax.toFixed(1)} m · 비행시간 T=${d.T.toFixed(2)} s`,
+        ? `공1 예상: 낙하시간 T=${d.T.toFixed(2)} s · 착지속도 ${d.vLand.toFixed(1)} m/s${dragNote}`
+        : `공1 예상: 사거리 R=${d.R.toFixed(1)} m · 최고점 H=${d.Hmax.toFixed(1)} m · T=${d.T.toFixed(2)} s${dragNote}`,
       20, 44,
     )
     if (free && params.h === 0) {
@@ -299,36 +367,81 @@ const projectile = {
     } else if (state.done) {
       ctx.fillStyle = '#16a34a'
       ctx.font = 'bold 15px sans-serif'
-      ctx.fillText(balls.length > 1 ? '모든 공 착지!' : free ? `착지! T = ${d.T.toFixed(2)} s` : `착지! R = ${main.x.toFixed(1)} m`, 20, 68)
+      ctx.fillText(
+        balls.length > 1 ? '모든 공 착지!' : free ? `착지! T = ${d.T.toFixed(2)} s` : `착지! R = ${main.x.toFixed(1)} m`,
+        20, 68,
+      )
     }
   },
 
   chart: {
-    // 그래프는 "현재 슬라이더 조건"(파란 공) 기준
+    /**
+     * 한 점에 모든 공의 값을 담는다:
+     *   x{i}, y{i}: 공i 위치 · v{i}: 공i 속력 · ke{i}: 공i 운동에너지
+     * 공1 상세용: vx, vy, v, ke, pe, e
+     */
     getPoint: (state, params) => {
-      const d = derived(params)
+      const pt = { t: Number(state.t.toFixed(3)) }
+      state.balls.forEach((b, i) => {
+        const vx = b.landed ? 0 : b.vx
+        const vy = b.landed ? 0 : b.vy
+        const v2 = vx * vx + vy * vy
+        pt[`x${i}`] = Number(b.x.toFixed(2))
+        pt[`y${i}`] = Number(b.y.toFixed(2))
+        pt[`v${i}`] = Number(Math.sqrt(v2).toFixed(2))
+        pt[`ke${i}`] = Number((0.5 * params.m * v2).toFixed(1))
+      })
       const main = state.balls[0]
-      const tb = Math.min(state.t, d.T)
-      const vy = d.vy0 - G * tb
-      return {
-        x: Number(main.x.toFixed(2)),
-        y: Number(main.y.toFixed(2)),
-        t: Number(tb.toFixed(3)),
-        vx: Number(d.vx0.toFixed(2)),
-        vy: Number(vy.toFixed(2)),
-        v: Number(Math.hypot(d.vx0, vy).toFixed(2)),
-      }
+      const vx = main.landed ? 0 : main.vx
+      const vy = main.landed ? 0 : main.vy
+      pt.vx = Number(vx.toFixed(2))
+      pt.vy = Number(vy.toFixed(2))
+      pt.v = pt.v0
+      pt.ke = pt.ke0
+      pt.pe = Number((params.m * params.g * main.y).toFixed(1))
+      pt.e = Number((pt.ke + pt.pe).toFixed(1))
+      return pt
     },
     views: [
       {
-        label: '궤적 (x-y)',
-        xKey: 'x',
+        label: '궤적',
+        xKey: 'x0',
         xLabel: '수평거리 x (m)',
         yLabel: '높이 y (m)',
-        series: [{ key: 'y', label: '높이 y (m) — 현재 공', color: '#2563eb' }],
+        series: (params) =>
+          allCfgs(params).map((cfg, i) => ({
+            key: `y${i}`,
+            xKey: `x${i}`,
+            label: `${ballName(i)} 궤적`,
+            color: ballColor(i),
+          })),
       },
       {
-        label: '속도-시간',
+        label: '속력 비교',
+        xKey: 't',
+        xLabel: '시간 t (s)',
+        yLabel: '속력 |v| (m/s)',
+        series: (params) =>
+          allCfgs(params).map((cfg, i) => ({
+            key: `v${i}`,
+            label: `${ballName(i)} |v|`,
+            color: ballColor(i),
+          })),
+      },
+      {
+        label: '운동에너지 비교',
+        xKey: 't',
+        xLabel: '시간 t (s)',
+        yLabel: '운동에너지 (J)',
+        series: (params) =>
+          allCfgs(params).map((cfg, i) => ({
+            key: `ke${i}`,
+            label: `${ballName(i)} KE`,
+            color: ballColor(i),
+          })),
+      },
+      {
+        label: '공1: 속도 성분',
         xKey: 't',
         xLabel: '시간 t (s)',
         yLabel: '속도 (m/s)',
@@ -338,28 +451,35 @@ const projectile = {
           { key: 'v', label: '전체 속력 |v|', color: '#dc2626' },
         ],
       },
+      {
+        label: '공1: 에너지',
+        xKey: 't',
+        xLabel: '시간 t (s)',
+        yLabel: '에너지 (J)',
+        series: [
+          { key: 'ke', label: '운동에너지 ½mv²', color: '#dc2626' },
+          { key: 'pe', label: '위치에너지 mgy', color: '#2563eb' },
+          { key: 'e', label: '역학적 에너지 E', color: '#111827' },
+        ],
+      },
     ],
   },
 
   table: {
     columns: [
-      { key: 'mode', label: '모드', unit: '' },
-      { key: 'v0', label: 'v₀', unit: 'm/s' },
-      { key: 'theta', label: '각도 θ', unit: '°' },
-      { key: 'h', label: '높이 h', unit: 'm' },
+      { key: 'ball', label: '공', unit: '' },
+      { key: 'cond', label: '조건', unit: '' },
       { key: 'R', label: '사거리 R', unit: 'm' },
       { key: 'H', label: '최고점 H', unit: 'm' },
       { key: 'T', label: '비행시간 T', unit: 's' },
       { key: 'vLand', label: '착지속도', unit: 'm/s' },
     ],
+    // 측정 버튼 → 공1(현재 조건) 한 줄 기록
     sample: (state, params) => {
-      const d = derived(params)
-      const free = isFreefall(params)
+      const d = predict(cfgFrom(params))
       return {
-        mode: free ? '자유낙하' : '포물선',
-        v0: free ? 0 : params.v0,
-        theta: free ? '-' : params.theta,
-        h: params.h,
+        ball: '공1',
+        cond: cfgLabel(cfgFrom(params)),
         R: d.R.toFixed(1),
         H: d.Hmax.toFixed(1),
         T: d.T.toFixed(2),
@@ -369,9 +489,9 @@ const projectile = {
   },
 
   info: {
-    formula: 'x = v₀cosθ·t,   y = h + v₀sinθ·t − ½gt²   (자유낙하: v₀=0, y = h − ½gt²)',
+    formula: 'x = v₀cosθ·t,  y = h + v₀sinθ·t − ½gt²   |   공기저항: a = (−k·vx, −g − k·vy)',
     description:
-      '투사체는 수평으로는 등속(vx = v₀cosθ), 수직으로는 중력에 의한 등가속 운동(vy = v₀sinθ − gt)을 동시에 합니다. 두 운동이 합쳐져 포물선 궤적이 만들어집니다.\n\n• [공 추가] 버튼: 현재 슬라이더 조건의 공을 고정해 두고, 조건을 바꿔 여러 공을 만들면 전부 동시에 발사됩니다. 30°와 60°의 사거리가 같은지, 45°가 정말 최대인지 한 화면에서 비교해 보세요! (파란 공은 항상 현재 슬라이더를 따라갑니다)\n• [속도-시간] 그래프에서 vx는 수평선(등속!), vy는 기울기 −g인 직선(등가속!)임을 확인하세요. 전체 속력 |v|는 최고점에서 최소가 됩니다(vy=0이라 vx만 남음).\n• 자유낙하 모드(v₀=0): 높이 h에서 가만히 놓으면 낙하시간 T = √(2h/g), 착지속도 v = √(2gh)입니다. 높이를 4배로 하면 낙하시간과 착지속도는 2배가 됩니다.\n• 사거리(h=0일 때): R = v₀²·sin2θ/g — θ=45°에서 최대, 초기속도 v₀가 2배면 사거리는 4배.',
+      '투사체는 수평으로는 등속, 수직으로는 중력에 의한 등가속 운동을 동시에 합니다. 중력 g와 공기저항 k도 변인으로 바꿀 수 있습니다.\n\n• [공 추가]: 공마다 v₀·θ·h·g·k를 따로 설정해 동시에 발사됩니다. 그래프의 [속력 비교]·[운동에너지 비교]에서 공별 곡선이 같은 색으로 구별됩니다. 30° vs 60° 사거리, 지구(g=9.8) vs 달(g=1.6), 저항 있음 vs 없음 등을 비교해 보세요.\n• 중력가속도 g: 달 1.6 · 화성 3.7 · 지구 9.8 · 목성 24.8 m/s²\n• 공기저항 k: k>0이면 궤적이 비대칭(내려올 때 더 가파름)이 되고 사거리가 줄어듭니다. 자유낙하에서는 속력이 종단속도 g/k에 수렴하는 것을 [속력 비교] 그래프에서 확인하세요.\n• [공1: 에너지] 그래프: 운동에너지 ½mv²와 위치에너지 mgy가 서로 교환됩니다. k=0이면 총 역학적 에너지 E가 수평선(보존!), k>0이면 E가 점점 감소합니다.\n• 질량 m은 (이 저항 모델에서는) 운동에 영향을 주지 않고 에너지 크기만 바꿉니다.',
   },
 }
 

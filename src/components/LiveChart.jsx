@@ -52,15 +52,19 @@ export default function LiveChart({ module, params, pointsRef, version }) {
   const views = cfg.views
   const view = views ? views[Math.min(viewIdx, views.length - 1)] : cfg
   const xKey = view.xKey ?? 'x'
+  // series는 배열 또는 (params) => 배열 (공 개수처럼 동적으로 변할 때)
+  const series = typeof view.series === 'function' ? view.series(params) : view.series
 
   const data = {
-    datasets: view.series.map((s) => ({
+    datasets: series.map((s) => ({
       label: s.label,
-      data: points.map((p) => ({ x: p[xKey], y: p[s.key] })),
+      // 시리즈별 x축 키(s.xKey)를 지원 — 예: 공마다 다른 x좌표의 궤적 비교
+      data: points.map((p) => ({ x: p[s.xKey ?? xKey], y: p[s.key] })),
       borderColor: s.color,
       backgroundColor: s.color,
       borderWidth: 2,
       pointRadius: s.pointRadius ?? 0,
+      borderDash: s.dash,
       tension: 0,
     })),
   }
@@ -79,7 +83,7 @@ export default function LiveChart({ module, params, pointsRef, version }) {
       },
     },
     plugins: {
-      legend: { display: view.series.length > 1 },
+      legend: { display: series.length > 1 },
     },
   }
 
