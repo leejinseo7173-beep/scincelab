@@ -8,7 +8,8 @@ const MAX_BALLS = 5
 const BALL_COLORS = ['#dc2626', '#059669', '#d97706', '#7c3aed', '#0891b2']
 
 const SLIDER_DEFS = [
-  { key: 'v0', label: 'v₀', min: 5, max: 50, step: 1, unit: 'm/s', show: (b) => !b.free },
+  // 연직낙하 모드에서 v₀는 "아래로 던지는" 초기속도 (0 = 자유낙하)
+  { key: 'v0', label: 'v₀', min: 0, max: 50, step: 1, unit: 'm/s' },
   { key: 'theta', label: 'θ', min: 0, max: 90, step: 1, unit: '°', show: (b) => !b.free },
   { key: 'h', label: 'h', min: 0, max: 30, step: 0.5, unit: 'm' },
   { key: 'g', label: 'g', min: 1, max: 25, step: 0.1, unit: 'm/s²' },
@@ -63,13 +64,13 @@ export default function ProjectileBallsEditor({ value: balls = [], onChange, par
                 value={b.free ? 'freefall' : 'projectile'}
                 onChange={(e) =>
                   update(i, e.target.value === 'freefall'
-                    ? { free: true, v0: 0, theta: 0 }
+                    ? { free: true, theta: 0 }
                     : { free: false, v0: b.v0 || 20, theta: b.theta || 45 })
                 }
                 className="rounded border border-slate-200 px-1.5 py-0.5 text-xs"
               >
                 <option value="projectile">포물선</option>
-                <option value="freefall">자유낙하</option>
+                <option value="freefall">연직낙하</option>
               </select>
               <button
                 onClick={() => remove(i)}

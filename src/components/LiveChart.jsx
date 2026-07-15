@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chart, registerables } from 'chart.js'
 import { Line } from 'react-chartjs-2'
+import { downloadCSV } from '../utils/csv'
 
 Chart.register(...registerables)
 
@@ -87,11 +88,26 @@ export default function LiveChart({ module, params, pointsRef, version }) {
     },
   }
 
+  // 현재 뷰의 데이터를 CSV로 내보내기 (엑셀에서 분산형 차트로 그리기 좋은 형태)
+  const exportCSV = () => {
+    const mixedX = series.some((s) => s.xKey && s.xKey !== xKey)
+    let header, rows
+    if (mixedX) {
+      // 시리즈마다 x가 다르면(예: 공별 궤적) [x, y] 쌍을 나란히
+      header = series.flatMap((s) => [`${s.label} x`, `${s.label} y`])
+      rows = points.map((p) => series.flatMap((s) => [p[s.xKey ?? xKey], p[s.key]]))
+    } else {
+      header = [resolveLabel(view.xLabel, params), ...series.map((s) => s.label)]
+      rows = points.map((p) => [p[xKey], ...series.map((s) => p[s.key])])
+    }
+    downloadCSV(`scilab-${module.id}-${view.label ?? '그래프'}.csv`, header, rows)
+  }
+
   return (
     <div className="p-3">
-      {views && (
-        <div className="mb-2 flex gap-1">
-          {views.map((v, i) => (
+      <div className="mb-2 flex gap-1">
+        {views &&
+          views.map((v, i) => (
             <button
               key={v.label}
               onClick={() => setViewIdx(i)}
@@ -104,8 +120,15 @@ export default function LiveChart({ module, params, pointsRef, version }) {
               {v.label}
             </button>
           ))}
-        </div>
-      )}
+        <button
+          onClick={exportCSV}
+          disabled={points.length === 0}
+          className="ml-auto rounded-md bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-40"
+          title="현재 그래프 데이터를 CSV로 저장 → 엑셀에서 차트 만들기"
+        >
+          ⬇ CSV 저장 (엑셀)
+        </button>
+      </div>
       <div className="h-52">
         <Line data={data} options={options} />
       </div>

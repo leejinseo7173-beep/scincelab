@@ -36,7 +36,7 @@ function cfgFrom(params) {
   const free = isFreefall(params)
   return {
     free,
-    v0: free ? 0 : params.v0,
+    v0: params.v0, // 연직낙하 모드에서는 "아래로 던지는" 초기속도 (0이면 자유낙하)
     theta: free ? 0 : params.theta,
     h: params.h,
     g: params.g,
@@ -51,7 +51,8 @@ function initialVel(cfg) {
   const th = rad(cfg.theta)
   return {
     vx0: cfg.free ? 0 : cfg.v0 * Math.cos(th),
-    vy0: cfg.free ? 0 : cfg.v0 * Math.sin(th),
+    // 연직낙하 모드: v₀는 아래 방향(−) 초기속도
+    vy0: cfg.free ? -cfg.v0 : cfg.v0 * Math.sin(th),
   }
 }
 
@@ -73,7 +74,8 @@ function predict(cfg, env) {
     res = {
       T,
       R,
-      Hmax: cfg.h + (vy0 * vy0) / (2 * cfg.g),
+      // 위로 던질 때만 정점이 시작점보다 높다 (아래로 던지면 최고점 = 시작 높이)
+      Hmax: vy0 > 0 ? cfg.h + (vy0 * vy0) / (2 * cfg.g) : cfg.h,
       vLand: Math.hypot(vx0, vy0 - cfg.g * T),
       xMin: Math.min(0, R),
       xMax: Math.max(0, R),
@@ -111,7 +113,11 @@ function predict(cfg, env) {
 }
 
 const cfgLabel = (cfg) => {
-  let s = cfg.free ? `자유낙하 h=${cfg.h}m` : `v₀=${cfg.v0} θ=${cfg.theta}° h=${cfg.h}m`
+  let s = cfg.free
+    ? cfg.v0 > 0
+      ? `연직낙하 v₀=${cfg.v0}↓ h=${cfg.h}m`
+      : `자유낙하 h=${cfg.h}m`
+    : `v₀=${cfg.v0} θ=${cfg.theta}° h=${cfg.h}m`
   if (cfg.g !== 9.8) s += ` g=${cfg.g}`
   if (cfg.k > 0) s += ` k=${cfg.k}`
   return s
@@ -176,12 +182,11 @@ const projectile = {
       value: 'projectile',
       options: [
         { value: 'projectile', label: '포물선 운동 (발사)' },
-        { value: 'freefall', label: '자유낙하 (v₀ = 0)' },
+        { value: 'freefall', label: '연직 낙하 (아래로 v₀, 0이면 자유낙하)' },
       ],
     },
     {
-      key: 'v0', label: '초기속도 v₀', min: 5, max: 50, step: 1, value: 20, unit: 'm/s',
-      visible: (p) => !isFreefall(p),
+      key: 'v0', label: '초기속도 v₀', min: 0, max: 50, step: 1, value: 20, unit: 'm/s',
     },
     {
       key: 'theta', label: '발사각 θ', min: 0, max: 90, step: 1, value: 45, unit: '°',
@@ -424,6 +429,10 @@ const projectile = {
       ctx.fillStyle = '#dc2626'
       ctx.font = 'bold 15px sans-serif'
       ctx.fillText('초기높이 h를 올려서 떨어뜨려 보세요!', 20, 68)
+    } else if (free && params.v0 > 0 && state.t === 0) {
+      ctx.fillStyle = '#0284c7'
+      ctx.font = 'bold 13px sans-serif'
+      ctx.fillText(`아래로 v₀=${params.v0} m/s로 던집니다`, 20, 68)
     } else if (state.done) {
       ctx.fillStyle = '#16a34a'
       ctx.font = 'bold 15px sans-serif'
@@ -556,7 +565,7 @@ const projectile = {
   info: {
     formula: 'a = ( −kEff·(vx − w),  −g − kEff·vy ),   kEff = k·(ρ/1.2)',
     description:
-      '투사체는 수평 등속 + 수직 등가속 운동의 합성입니다. 여기에 중력 g, 공기저항 k, 바람 w, 공기 밀도 ρ까지 변인으로 바꿀 수 있습니다.\n\n• 바람: 공기저항은 "공기에 대한 상대속도"에 작용하므로, 바람은 저항을 통해서만 공을 밉니다. 순풍(→)이면 사거리가 늘고 역풍(←)이면 줄어듭니다. 중요: k=0(저항 없음)이면 바람이 아무리 세도 궤적이 변하지 않습니다!\n• 공기 밀도 ρ: 저항의 세기가 ρ에 비례합니다(kEff = k·ρ/1.2). ρ=0은 진공 — 저항도 바람도 사라집니다. 고산지대(ρ≈0.9)나 물속 같은 고밀도(ρ=3)를 흉내내 보세요.\n• [공 추가]: 공마다 v₀·θ·h·g·k를 따로 설정해 동시 발사 비교. 바람·밀도는 환경이라 모든 공에 공통 적용됩니다. 같은 공을 k=0과 k=0.3으로 나눠 바람 속에서 비교해 보세요.\n• 중력가속도 g: 달 1.6 · 화성 3.7 · 지구 9.8 · 목성 24.8 m/s²\n• [공1: 에너지] 그래프: kEff=0이면 역학적 에너지 E가 수평선(보존), 저항이 있으면 감소하고, 순풍이 밀어주면 오히려 증가할 수도 있습니다(바람이 일을 해줌).\n• 질량 m은 (이 저항 모델에서는) 운동에 영향을 주지 않고 에너지 크기만 바꿉니다.',
+      '투사체는 수평 등속 + 수직 등가속 운동의 합성입니다. 여기에 중력 g, 공기저항 k, 바람 w, 공기 밀도 ρ까지 변인으로 바꿀 수 있습니다.\n\n• 바람: 공기저항은 "공기에 대한 상대속도"에 작용하므로, 바람은 저항을 통해서만 공을 밉니다. 순풍(→)이면 사거리가 늘고 역풍(←)이면 줄어듭니다. 중요: k=0(저항 없음)이면 바람이 아무리 세도 궤적이 변하지 않습니다!\n• 공기 밀도 ρ: 저항의 세기가 ρ에 비례합니다(kEff = k·ρ/1.2). ρ=0은 진공 — 저항도 바람도 사라집니다. 고산지대(ρ≈0.9)나 물속 같은 고밀도(ρ=3)를 흉내내 보세요.\n• [공 추가]: 공마다 v₀·θ·h·g·k를 따로 설정해 동시 발사 비교. 바람·밀도는 환경이라 모든 공에 공통 적용됩니다. 같은 공을 k=0과 k=0.3으로 나눠 바람 속에서 비교해 보세요.\n• 연직 낙하 모드: v₀는 "아래로 던지는" 초기속도입니다(0이면 자유낙하). 초기속도가 있어도 종단속도(g/kEff)에 수렴하는 것을 확인해 보세요.\n• 중력가속도 g: 달 1.6 · 화성 3.7 · 지구 9.8 · 목성 24.8 m/s²\n• [공1: 에너지] 그래프: kEff=0이면 역학적 에너지 E가 수평선(보존), 저항이 있으면 감소하고, 순풍이 밀어주면 오히려 증가할 수도 있습니다(바람이 일을 해줌).\n• 질량 m은 (이 저항 모델에서는) 운동에 영향을 주지 않고 에너지 크기만 바꿉니다.',
   },
 }
 

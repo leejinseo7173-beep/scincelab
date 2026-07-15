@@ -1,11 +1,19 @@
+import { downloadCSV } from '../utils/csv'
+
 /**
  * 데이터 표.
  * "측정" 버튼 → module.table.sample(state, params) 결과를 한 줄 추가.
- * 행 개별 삭제 / 전체 지우기 지원.
+ * 행 개별 삭제 / 전체 지우기 / CSV 내보내기(엑셀) 지원.
  */
 export default function DataTable({ module, rows, onMeasure, onDeleteRow, onClear }) {
   const cfg = module.table
   if (!cfg) return <div className="p-6 text-sm text-slate-400">이 실험에는 데이터 표가 없습니다.</div>
+
+  const exportCSV = () => {
+    const header = cfg.columns.map((c) => (c.unit ? `${c.label} (${c.unit})` : c.label))
+    const data = rows.map((row) => cfg.columns.map((c) => row[c.key]))
+    downloadCSV(`scilab-${module.id}-측정.csv`, header, data)
+  }
 
   return (
     <div className="p-3">
@@ -15,6 +23,13 @@ export default function DataTable({ module, rows, onMeasure, onDeleteRow, onClea
           className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
         >
           📏 측정
+        </button>
+        <button
+          onClick={exportCSV}
+          disabled={rows.length === 0}
+          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40"
+        >
+          ⬇ CSV 저장 (엑셀)
         </button>
         <button
           onClick={onClear}
