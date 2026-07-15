@@ -2,8 +2,12 @@
  * 실험 ② 포물선 운동 (투사체) + 자유낙하 — 물리
  *
  * 공기저항 없음(kEff=0): x = v₀cosθ·t, y = h + v₀sinθ·t − ½gt² (해석해)
- * 공기저항 있음: a = (−kEff·(vx − w), −g − kEff·vy) 를 수치 적분
+ * 공기저항 있음: 저항은 "힘" F = −kEff·(v − w) 이고 가속도는 F/m이므로
+ *   a = ( −(kEff/m)·(vx − w),  −g − (kEff/m)·vy )  를 수치 적분
  *   · kEff = k × (ρ/1.2) — 밀도 ρ가 클수록 저항이 세다 (ρ=0 → 진공, 저항 없음)
+ *   · 질량 m이 클수록 같은 저항력에도 가속도 변화가 작다 → 무거운 공이 덜 영향받음
+ *     (진공에서는 질량과 무관하게 똑같이 떨어진다 — 갈릴레이)
+ *   · 종단속도 v_t = m·g/kEff — 무거울수록 종단속도가 크다
  *   · w = 바람의 수평 속도 — 저항은 "공기에 대한 상대속도"에 작용하므로
  *     바람은 공기저항을 통해서만 공을 민다 (k=0이면 바람도 영향 없음!)
  * 에너지: KE = ½mv², PE = mgy, E = KE + PE (kEff=0이면 E 보존)
@@ -41,8 +45,12 @@ function cfgFrom(params) {
     h: params.h,
     g: params.g,
     k: params.k,
+    m: params.m,
   }
 }
+
+/** 과거 버전 공 데이터(m 없음) 호환 */
+const massOf = (cfg) => cfg.m ?? 1
 
 /** 전체 공 조건 목록: [공1(현재 슬라이더), ...추가된 공들] */
 const allCfgs = (params) => [cfgFrom(params), ...(params.balls ?? [])]
@@ -62,7 +70,8 @@ function initialVel(cfg) {
  */
 const predCache = new Map()
 function predict(cfg, env) {
-  const kEff = cfg.k * env.rhoF
+  // 저항력 F = −kEff·v_rel, 가속도 기여 = F/m
+  const kEff = (cfg.k * env.rhoF) / massOf(cfg)
   const key = `${cfg.free}|${cfg.v0}|${cfg.theta}|${cfg.h}|${cfg.g}|${kEff}|${env.wx}`
   if (predCache.has(key)) return predCache.get(key)
 
@@ -120,6 +129,7 @@ const cfgLabel = (cfg) => {
     : `v₀=${cfg.v0} θ=${cfg.theta}° h=${cfg.h}m`
   if (cfg.g !== 9.8) s += ` g=${cfg.g}`
   if (cfg.k > 0) s += ` k=${cfg.k}`
+  if (massOf(cfg) !== 1) s += ` m=${massOf(cfg)}kg`
   return s
 }
 
@@ -194,7 +204,7 @@ const projectile = {
     },
     { key: 'h', label: '초기높이 h', min: 0, max: 30, step: 0.5, value: 0, unit: 'm' },
     { key: 'g', label: '중력가속도 g', min: 1, max: 25, step: 0.1, value: 9.8, unit: 'm/s²' },
-    { key: 'k', label: '공기저항 계수 k', min: 0, max: 1, step: 0.01, value: 0, unit: '/s' },
+    { key: 'k', label: '공기저항 계수 k', min: 0, max: 1, step: 0.01, value: 0, unit: 'kg/s' },
     {
       key: 'windDir',
       label: '바람 방향',
@@ -207,7 +217,7 @@ const projectile = {
     },
     { key: 'wind', label: '바람 세기', min: 0, max: 20, step: 0.5, value: 0, unit: 'm/s' },
     { key: 'rho', label: '공기 밀도 ρ', min: 0, max: 3, step: 0.05, value: 1.2, unit: 'kg/m³' },
-    { key: 'm', label: '질량 m (에너지 계산용)', min: 0.5, max: 5, step: 0.1, value: 1, unit: 'kg' },
+    { key: 'm', label: '질량 m', min: 0.5, max: 5, step: 0.1, value: 1, unit: 'kg' },
     // 추가된 공들 — 공마다 변인을 따로 편집하는 커스텀 패널
     { key: 'balls', type: 'custom', value: [], component: ProjectileBallsEditor },
   ],
@@ -225,7 +235,7 @@ const projectile = {
     let allLanded = true
     const balls = state.balls.map((b) => {
       if (b.landed) return b
-      const kEff = b.cfg.k * env.rhoF
+      const kEff = (b.cfg.k * env.rhoF) / massOf(b.cfg) // 저항 가속도 = 힘/질량
       let { x, y, vx, vy } = b
       let landed = false
       let landT = null
@@ -268,7 +278,7 @@ const projectile = {
     const balls = state.balls
     const preds = balls.map((b) => predict(b.cfg, env))
     const d = preds[0] // 공1 예상값
-    const kEffMain = params.k * env.rhoF
+    const kEffMain = (params.k * env.rhoF) / params.m // 공1의 저항 가속도 계수
 
     // ---- 월드 → 픽셀 스케일: 모든 공의 x범위(음수 포함)/최고점이 들어오게 ----
     const xMin = Math.min(0, ...preds.map((p) => p.xMin))
@@ -340,7 +350,7 @@ const projectile = {
       ctx.textAlign = 'center'
       ctx.fillText(
         `바람 ${env.wx > 0 ? '→' : '←'} ${params.wind} m/s · ρ=${params.rho} kg/m³` +
-          (kEffMain === 0 && balls.every((b) => b.cfg.k * env.rhoF === 0) ? '  (저항 0 → 영향 없음!)' : ''),
+          (balls.every((b) => b.cfg.k * env.rhoF === 0) ? '  (저항 0 → 영향 없음!)' : ''),
         W / 2, cy - 12,
       )
       ctx.textAlign = 'start'
@@ -418,7 +428,8 @@ const projectile = {
     )
     ctx.fillStyle = '#64748b'
     ctx.font = '12px sans-serif'
-    const dragNote = kEffMain > 0 ? ` · 종단속도 g/kEff=${(params.g / kEffMain).toFixed(1)} m/s` : ''
+    const dragNote =
+      kEffMain > 0 ? ` · 종단속도 mg/kEff=${(params.g / kEffMain).toFixed(1)} m/s` : ''
     ctx.fillText(
       free
         ? `공1 예상: 낙하시간 T=${d.T.toFixed(2)} s · 착지속도 ${d.vLand.toFixed(1)} m/s${dragNote}`
@@ -458,7 +469,7 @@ const projectile = {
         pt[`x${i}`] = Number(b.x.toFixed(2))
         pt[`y${i}`] = Number(b.y.toFixed(2))
         pt[`v${i}`] = Number(Math.sqrt(v2).toFixed(2))
-        pt[`ke${i}`] = Number((0.5 * params.m * v2).toFixed(1))
+        pt[`ke${i}`] = Number((0.5 * massOf(b.cfg) * v2).toFixed(1)) // 공별 질량으로 KE
       })
       const main = state.balls[0]
       const vx = main.landed ? 0 : main.vx
@@ -563,9 +574,9 @@ const projectile = {
   },
 
   info: {
-    formula: 'a = ( −kEff·(vx − w),  −g − kEff·vy ),   kEff = k·(ρ/1.2)',
+    formula: 'F저항 = −kEff·(v − w),   a = F/m − g·ĵ,   kEff = k·(ρ/1.2),   종단속도 = mg/kEff',
     description:
-      '투사체는 수평 등속 + 수직 등가속 운동의 합성입니다. 여기에 중력 g, 공기저항 k, 바람 w, 공기 밀도 ρ까지 변인으로 바꿀 수 있습니다.\n\n• 바람: 공기저항은 "공기에 대한 상대속도"에 작용하므로, 바람은 저항을 통해서만 공을 밉니다. 순풍(→)이면 사거리가 늘고 역풍(←)이면 줄어듭니다. 중요: k=0(저항 없음)이면 바람이 아무리 세도 궤적이 변하지 않습니다!\n• 공기 밀도 ρ: 저항의 세기가 ρ에 비례합니다(kEff = k·ρ/1.2). ρ=0은 진공 — 저항도 바람도 사라집니다. 고산지대(ρ≈0.9)나 물속 같은 고밀도(ρ=3)를 흉내내 보세요.\n• [공 추가]: 공마다 v₀·θ·h·g·k를 따로 설정해 동시 발사 비교. 바람·밀도는 환경이라 모든 공에 공통 적용됩니다. 같은 공을 k=0과 k=0.3으로 나눠 바람 속에서 비교해 보세요.\n• 연직 낙하 모드: v₀는 "아래로 던지는" 초기속도입니다(0이면 자유낙하). 초기속도가 있어도 종단속도(g/kEff)에 수렴하는 것을 확인해 보세요.\n• 중력가속도 g: 달 1.6 · 화성 3.7 · 지구 9.8 · 목성 24.8 m/s²\n• [공1: 에너지] 그래프: kEff=0이면 역학적 에너지 E가 수평선(보존), 저항이 있으면 감소하고, 순풍이 밀어주면 오히려 증가할 수도 있습니다(바람이 일을 해줌).\n• 질량 m은 (이 저항 모델에서는) 운동에 영향을 주지 않고 에너지 크기만 바꿉니다.',
+      '투사체는 수평 등속 + 수직 등가속 운동의 합성입니다. 여기에 중력 g, 공기저항 k, 바람 w, 공기 밀도 ρ, 질량 m까지 변인으로 바꿀 수 있습니다.\n\n• 질량과 공기저항: 저항은 "힘"이고 가속도는 힘÷질량이므로, 같은 저항이라도 무거운 공은 덜 영향받습니다. k>0에서 m=0.5와 m=5를 비교해 보세요 — 무거운 공이 더 멀리, 더 빨리 떨어집니다. 반면 진공(k=0 또는 ρ=0)에서는 질량과 무관하게 똑같이 움직입니다(갈릴레이의 낙하 실험!).\n• 종단속도: v_t = mg/kEff — 무거운 물체일수록 종단속도가 큽니다. 빗방울과 우박이 다른 속도로 떨어지는 이유입니다.\n• 바람: 저항은 "공기에 대한 상대속도"에 작용하므로, 바람은 저항을 통해서만 공을 밉니다. k=0이면 바람이 아무리 세도 궤적이 변하지 않습니다!\n• 공기 밀도 ρ: 저항의 세기가 ρ에 비례합니다(kEff = k·ρ/1.2). ρ=0은 진공 — 저항도 바람도 사라집니다.\n• [공 추가]: 공마다 v₀·θ·h·g·k·m을 따로 설정해 동시 발사 비교. 바람·밀도는 환경이라 모든 공에 공통 적용됩니다.\n• 연직 낙하 모드: v₀는 "아래로 던지는" 초기속도입니다(0이면 자유낙하).\n• 중력가속도 g: 달 1.6 · 화성 3.7 · 지구 9.8 · 목성 24.8 m/s²\n• [공1: 에너지] 그래프: 저항이 없으면 역학적 에너지 E가 수평선(보존), 있으면 감소합니다.',
   },
 }
 

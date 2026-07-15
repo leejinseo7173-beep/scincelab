@@ -13,7 +13,8 @@ const SLIDER_DEFS = [
   { key: 'theta', label: 'θ', min: 0, max: 90, step: 1, unit: '°', show: (b) => !b.free },
   { key: 'h', label: 'h', min: 0, max: 30, step: 0.5, unit: 'm' },
   { key: 'g', label: 'g', min: 1, max: 25, step: 0.1, unit: 'm/s²' },
-  { key: 'k', label: 'k', min: 0, max: 1, step: 0.01, unit: '/s' },
+  { key: 'k', label: 'k', min: 0, max: 1, step: 0.01, unit: 'kg/s' },
+  { key: 'm', label: 'm', min: 0.5, max: 5, step: 0.1, unit: 'kg' },
 ]
 
 export default function ProjectileBallsEditor({ value: balls = [], onChange, params }) {
@@ -27,11 +28,12 @@ export default function ProjectileBallsEditor({ value: balls = [], onChange, par
       ...balls,
       {
         free,
-        v0: free ? 0 : params.v0,
+        v0: params.v0,
         theta: free ? 0 : params.theta,
         h: params.h,
         g: params.g,
         k: params.k,
+        m: params.m,
       },
     ])
   }
