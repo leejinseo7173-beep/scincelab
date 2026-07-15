@@ -49,6 +49,9 @@ const module = {
     series: [{ key, label, color, pointRadius? }],
     clearOnParamChange?: boolean,          // 기본 true. false면 파라미터를 바꿔도 점 누적
     resetOn?: (params) => any,             // 반환값이 바뀌면 그래프 초기화 (모드 전환 등)
+    // 확장: 그래프 여러 개를 버튼으로 전환 (views가 있으면 위 xLabel/series 대신 사용)
+    // getPoint는 모든 view가 쓸 값을 한 점에 담아 반환 (예: { x, y, t, vx, vy, v })
+    views?: [{ label, xKey, xLabel, yLabel, series }],
   },
 
   table: {
