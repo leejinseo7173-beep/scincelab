@@ -102,7 +102,7 @@ export default function LiveChart({ module, params, pointsRef, version }) {
           ))}
         </div>
       )}
-      <div className="h-64">
+      <div className="h-52">
         <Line data={data} options={options} />
       </div>
     </div>

@@ -143,11 +143,53 @@ export default function ExperimentLab({ module, experiments, onSwitch, onBack })
         </div>
       </header>
 
-      {/* ---------- 본문: 캔버스(좌) + 컨트롤(우) ---------- */}
+      {/* ---------- 본문: 좌측(캔버스 + 그래프 탭) / 우측(컨트롤) ----------
+           슬라이더를 조작하면서 시뮬레이션과 그래프의 변화를 동시에 볼 수 있게
+           한 화면 안에 모두 들어오는 배치 */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="flex h-[440px] flex-col lg:col-span-2">
-          <SimulationCanvas onFrame={handleFrame} />
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          <div className="h-[320px]">
+            <SimulationCanvas onFrame={handleFrame} />
+          </div>
+
+          {/* 탭: 그래프 / 표 / 설명 */}
+          <div className="rounded-xl bg-white shadow">
+            <div className="flex border-b border-slate-200">
+              {TABS.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`px-4 py-2 text-sm font-semibold transition ${
+                    tab === t.key
+                      ? 'border-b-2 border-blue-600 text-blue-600'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {tab === 'chart' && (
+              <LiveChart
+                module={module}
+                params={params}
+                pointsRef={pointsRef}
+                version={chartVersion}
+              />
+            )}
+            {tab === 'table' && (
+              <DataTable
+                module={module}
+                rows={rows}
+                onMeasure={handleMeasure}
+                onDeleteRow={(i) => setRows((r) => r.filter((_, j) => j !== i))}
+                onClear={() => setRows([])}
+              />
+            )}
+            {tab === 'info' && <InfoPanel module={module} />}
+          </div>
         </div>
+
         <div className="flex flex-col gap-4">
           <PlaybackControls
             playing={playing}
@@ -158,38 +200,6 @@ export default function ExperimentLab({ module, experiments, onSwitch, onBack })
           />
           <ControlPanel module={module} params={params} onChange={handleParamChange} />
         </div>
-      </div>
-
-      {/* ---------- 하단 탭: 그래프 / 표 / 설명 ---------- */}
-      <div className="rounded-xl bg-white shadow">
-        <div className="flex border-b border-slate-200">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-5 py-3 text-sm font-semibold transition ${
-                tab === t.key
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {tab === 'chart' && (
-          <LiveChart module={module} params={params} pointsRef={pointsRef} version={chartVersion} />
-        )}
-        {tab === 'table' && (
-          <DataTable
-            module={module}
-            rows={rows}
-            onMeasure={handleMeasure}
-            onDeleteRow={(i) => setRows((r) => r.filter((_, j) => j !== i))}
-            onClear={() => setRows([])}
-          />
-        )}
-        {tab === 'info' && <InfoPanel module={module} />}
       </div>
     </div>
   )
