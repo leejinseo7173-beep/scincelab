@@ -7,4 +7,9 @@ import incline from './incline'
 import projectile from './projectile'
 import gasLaw from './gasLaw'
 
-export const experiments = [incline, projectile, gasLaw]
+const all = [incline, projectile, gasLaw]
+
+// 단일 실험 배포용: VITE_ONLY=<실험id> 로 빌드하면 그 실험만 포함된다
+// (예: VITE_ONLY=projectile npx vite build → 포물선 실험 단독 HTML)
+const only = import.meta.env.VITE_ONLY
+export const experiments = only ? all.filter((e) => e.id === only) : all

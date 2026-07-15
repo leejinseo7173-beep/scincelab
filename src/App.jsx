@@ -10,7 +10,10 @@ import ExperimentLab from './components/ExperimentLab'
  * 타이밍 버그가 구조적으로 발생하지 않는다.
  */
 export default function App() {
-  const [selectedId, setSelectedId] = useState(null)
+  // 실험이 하나뿐이면(단일 실험 빌드) 로비를 건너뛰고 바로 실험 화면으로
+  const [selectedId, setSelectedId] = useState(
+    experiments.length === 1 ? experiments[0].id : null,
+  )
   const module = experiments.find((e) => e.id === selectedId)
 
   if (!module) {
