@@ -4,8 +4,10 @@
  * - 기본: { key, label, min, max, step, value, unit } → 슬라이더
  * - 확장: { type: 'select', options: [{ value, label }] } → 드롭다운
  * - 확장: visible(params) => boolean  → 조건부 표시 (예: 보일/샤를 모드별 변수)
+ * - 확장: module.actions = [{ label, apply(state, params) => newState }]
+ *   → 실험 전용 버튼 (예: 포물선 실험의 "공 추가")
  */
-export default function ControlPanel({ module, params, onChange }) {
+export default function ControlPanel({ module, params, onChange, onAction }) {
   const visibleParams = module.params.filter(
     (p) => !p.visible || p.visible(params),
   )
@@ -53,6 +55,20 @@ export default function ControlPanel({ module, params, onChange }) {
             </div>
           </label>
         ),
+      )}
+
+      {module.actions && (
+        <div className="flex flex-col gap-2 border-t border-slate-100 pt-3">
+          {module.actions.map((a) => (
+            <button
+              key={a.label}
+              onClick={() => onAction(a)}
+              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )

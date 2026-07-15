@@ -72,6 +72,12 @@ export default function ExperimentLab({ module, experiments, onSwitch, onBack })
     clearChart()
   }
 
+  /* ---------- 실험 전용 액션 버튼 (예: 공 추가) ---------- */
+  const handleAction = (action) => {
+    stateRef.current = action.apply(stateRef.current, params)
+    clearChart()
+  }
+
   /* ---------- 측정(데이터 표) ---------- */
   const handleMeasure = () => {
     if (!module.table) return
@@ -198,7 +204,12 @@ export default function ExperimentLab({ module, experiments, onSwitch, onBack })
             onReset={handleReset}
             onSpeed={setSpeed}
           />
-          <ControlPanel module={module} params={params} onChange={handleParamChange} />
+          <ControlPanel
+            module={module}
+            params={params}
+            onChange={handleParamChange}
+            onAction={handleAction}
+          />
         </div>
       </div>
     </div>
